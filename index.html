@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Faso Kuilga — Gestion des Points d'Eau du Burkina Faso</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💧</text></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="splash-screen" style="position:fixed;inset:0;background:#0d1117;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .5s ease">
+  <div style="text-align:center">
+    <div style="width:72px;height:72px;background:linear-gradient(135deg,#00c896,#0077ff);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 20px;box-shadow:0 0 40px rgba(0,200,150,.3);animation:splashPulse 1.5s ease-in-out infinite">💧</div>
+    <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#e6edf3;margin-bottom:6px">Faso <span style="color:#00c896">Kuilga</span></div>
+    <div style="font-size:13px;color:#7d8fa3;margin-bottom:40px">Système de Gestion des Points d'Eau</div>
+    <div style="width:200px;height:3px;background:#1c2230;border-radius:3px;overflow:hidden;margin:0 auto">
+      <div id="splash-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#00c896,#0077ff);border-radius:3px;transition:width .3s ease"></div>
+    </div>
+    <div id="splash-text" style="font-size:12px;color:#7d8fa3;margin-top:12px">Chargement des données...</div>
+  </div>
+</div>
+<style>
+@keyframes splashPulse{0%,100%{box-shadow:0 0 40px rgba(0,200,150,.3)}50%{box-shadow:0 0 60px rgba(0,200,150,.6)}}
+</style>
+<script>
+(function(){
+  const steps = [
+    {w:20, txt:"Connexion au serveur..."},
+    {w:45, txt:"Chargement des points d'eau..."},
+    {w:70, txt:"Initialisation de la carte..."},
+    {w:90, txt:"Préparation de l'interface..."},
+    {w:100,txt:"Bienvenue sur Faso Kuilga !"}
+  ];
+  let i = 0;
+  const bar = document.getElementById("splash-bar");
+  const txt = document.getElementById("splash-text");
+  const timer = setInterval(()=>{
+    if(i >= steps.length){ clearInterval(timer); return; }
+    bar.style.width = steps[i].w + "%";
+    txt.textContent = steps[i].txt;
+    i++;
+  }, 400);
+  window.addEventListener("load", ()=>{
+    setTimeout(()=>{
+      const sp = document.getElementById("splash-screen");
+      sp.style.opacity = "0";
+      setTimeout(()=>{ sp.style.display = "none"; }, 500);
+    }, 2200);
+  });
+})();
+</script>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <button onclick="togglePresentation()" id="btn-presentation" title="Mode presentation" style="background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);color:var(--accent);padding:0 10px;height:32px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;flex-shrink:0">🎯 Présentation</button>
+    <button onclick="toggleTheme()" id="btn-theme" title="Mode clair/sombre" style="background:transparent;border:1px solid var(--border);color:var(--text);width:32px;height:32px;border-radius:7px;cursor:pointer;font-size:16px;flex-shrink:0">🌙</button>
+    <div class="logo">
+      <div class="logo-icon">💧</div>
+      <div>
+        <div class="logo-text" style="font-size:13px;white-space:nowrap">Faso <span>Kuilga</span></div>
+        <div class="logo-sub">SIG — Gestion des Points d'Eau · Burkina Faso</div>
+      </div>
+    </div>
+  </div>
+  <nav class="topnav">
+    <button class="tnav active" onclick="switchPage('carte',this)">🗺️ Carte</button>
+    <button class="tnav" onclick="switchPage('dashboard',this)">📊 Tableau de bord</button>
+    <button class="tnav" onclick="switchPage('inventaire',this);updateInvKPIs()">📋 Inventaire</button>
+    <button class="tnav" onclick="switchPage('onea',this)">🚰 ONEA</button>
+    <button class="tnav" onclick="switchPage('interventions',this)">🔧 Interventions</button>
+    <button class="tnav" onclick="switchPage('alertes',this)">⚠️ Alertes</button>
+    <button class="tnav" onclick="switchPage('utilisateurs',this)">👥 Utilisateurs</button>
+    <button class="tnav" onclick="switchPage('rapports',this)">📄 Rapports</button>
+    <button class="tnav" onclick="switchPage('teledetection',this)">🛰️ Télédétection</button>
+    <button class="tnav" onclick="switchPage('parametres',this)">⚙️ Paramètres</button>
+  </nav>
+  <div class="topbar-right">
+    <div class="badge-live"><div class="dot"></div>En ligne</div>
+    <button class="btn-add" onclick="openModal()">＋ Nouveau point</button>
+    <div class="user-menu" onclick="switchPage('parametres',document.querySelector('.tnav:last-child'))">
+      <div class="user-av" id="user-av">AD</div>
+      <div class="user-info">
+        <div class="user-name" id="user-name">Administrateur</div>
+        <div class="user-role" id="user-role">Super Admin</div>
+      </div>
+    </div>
+    <button onclick="logout()" style="padding:6px 12px;background:rgba(224,60,60,.1);color:#e03c3c;border:1px solid rgba(224,60,60,.2);border-radius:8px;font-size:12px;cursor:pointer;font-family:DM Sans,sans-serif" title="Déconnexion">🚪 Déconnexion</button>
+  </div>
+</header>
+
+<div class="main-layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <div class="ss-title">Indicateurs clés</div>
+      <div class="kpi-grid">
+        <div class="kpi" style="--c:#00c896"><div class="kpi-icon">💧</div><div class="kpi-val" id="k-total">—</div><div class="kpi-lbl">Total</div></div>
+        <div class="kpi" style="--c:#00c896"><div class="kpi-icon">✅</div><div class="kpi-val" id="k-ok">—</div><div class="kpi-lbl">Fonctionnels</div></div>
+        <div class="kpi" style="--c:#e03c3c"><div class="kpi-icon">🔴</div><div class="kpi-val" id="k-panne">—</div><div class="kpi-lbl">En panne</div></div>
+        <div class="kpi" style="--c:#ff6b35"><div class="kpi-icon">🔧</div><div class="kpi-val" id="k-rehab">—</div><div class="kpi-lbl">Réhab.</div></div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="ss-title">Recherche</div>
+      <div class="search-wrap"><span>🔍</span><input type="text" id="search" placeholder="Nom, commune..." oninput="filterPoints()" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value=""/></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="ss-title">Type</div>
+      <div class="chips">
+        <div class="chip active" data-filter="type" data-val="forage" onclick="toggleChip(this)">⛏️ Forage</div>
+        <div class="chip active" data-filter="type" data-val="puits" onclick="toggleChip(this)">🪣 Puits</div>
+        <div class="chip active" data-filter="type" data-val="barrage" onclick="toggleChip(this)">🏞️ Barrage</div>
+        <div class="chip active" data-filter="type" data-val="retenue" onclick="toggleChip(this)">💦 Retenue</div>
+        <div class="chip active" data-filter="type" data-val="borne" onclick="toggleChip(this)">🚰 Borne</div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="ss-title">État</div>
+      <div class="chips">
+        <div class="chip active" data-filter="etat" data-val="fonctionnel" onclick="toggleChip(this)">✅ Fonctionnel</div>
+        <div class="chip active" data-filter="etat" data-val="panne" onclick="toggleChip(this)">🔴 En panne</div>
+        <div class="chip active" data-filter="etat" data-val="rehab" onclick="toggleChip(this)">🔧 Réhab.</div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="ss-title">Région</div>
+      <select id="sel-region" onchange="filterPoints()">
+        <option value="">Toutes les régions</option>
+        <option>Centre</option><option>Nord</option><option>Sahel</option>
+        <option>Hauts-Bassins</option><option>Est</option>
+        <option>Boucle du Mouhoun</option><option>Centre-Nord</option>
+        <option>Centre-Est</option><option>Centre-Sud</option><option>Cascades</option>
+      </select>
+    </div>
+    <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+      <div class="ss-title" style="display:flex;justify-content:space-between">
+        <span>Liste <span id="list-count" style="color:var(--accent)">(0)</span></span>
+        <span style="font-size:10px;color:var(--muted);cursor:pointer" onclick="exportCSV()">📥 CSV</span>
+      </div>
+      <div id="point-list" style="overflow-y:scroll;flex:1;height:300px;padding:8px"></div>
+    </div>
+  </aside>
+
+  <div class="page-container">
+
+    <!-- CARTE -->
+    <div class="page" id="page-carte">
+      <div id="map"></div>
+      <div class="map-controls">
+        <button class="mc-btn" onclick="map.setView([12.36,-1.53],7)" title="Recentrer sur le Burkina Faso" style="font-size:16px">🎯</button>
+        <button class="mc-btn" onclick="toggleBasemap()" id="btn-sat" title="Basculer vue satellite" style="font-size:16px">🛰️</button>
+        <button class="mc-btn" onclick="toggleFullscreen()" title="Plein écran" style="font-size:16px">⛶</button>
+        <button class="mc-btn" onclick="locateMe()" id="btn-locate" title="Ma position" style="font-size:16px">📍</button>
+        <button class="mc-btn" onclick="exportMapPNG()" title="Exporter carte PNG" style="font-size:16px">📸</button>
+      </div>
+      <div id="map-counter" style="position:absolute;bottom:30px;left:290px;z-index:1000;background:rgba(13,17,23,.92);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-family:Syne,sans-serif;pointer-events:none;border:1px solid rgba(0,200,150,.25);box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;background:#00c896;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite"></span><span id="map-counter-text">— / — points</span></div>
+      <div class="map-legend">
+        <div class="leg-title">📍 Légende</div>
+        <div style="height:1px;background:var(--border);margin-bottom:8px"></div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">État</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#00c896;box-shadow:0 0 6px rgba(0,200,150,.4)"></div>Fonctionnel<span class="leg-count" id="leg-fonct">—</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:#e03c3c;box-shadow:0 0 6px rgba(224,60,60,.4)"></div>En panne<span class="leg-count" id="leg-panne">—</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:#ff6b35;box-shadow:0 0 6px rgba(255,107,53,.4)"></div>Réhabilitation<span class="leg-count" id="leg-rehab">—</span></div>
+        <div style="height:1px;background:var(--border);margin:8px 0"></div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Type</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#0077ff;border-radius:3px"></div>Barrage<span class="leg-count" id="leg-barrage">—</span></div>
+        <div class="leg-item"><div class="leg-dot" style="background:#c084fc"></div>Borne ONEA<span class="leg-count" id="leg-borne">—</span></div>
+        <div style="height:1px;background:var(--border);margin:8px 0"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:10px;color:var(--muted)">Affichés</span>
+          <span style="font-family:Syne,sans-serif;font-size:13px;font-weight:800;color:var(--accent)" id="leg-total">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="page" id="page-dashboard">
+      <!-- KPI ROW -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;padding:16px 16px 0;flex-shrink:0">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-top:3px solid #0077ff;transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,119,255,.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total points</span><span style="font-size:20px">💧</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#0077ff" id="db-kpi-total">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">points d'eau inventoriés</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-top:3px solid #00c896;transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,200,150,.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Fonctionnels</span><span style="font-size:20px">✅</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#00c896" id="db-kpi-fonct">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="db-kpi-fonct-pct">— % du total</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="db-bar-fonct" style="height:100%;width:0%;background:#00c896;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-top:3px solid #e03c3c;transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(224,60,60,.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">En panne</span><span style="font-size:20px">🔴</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#e03c3c" id="db-kpi-panne">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="db-kpi-panne-pct">— % du total</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="db-bar-panne" style="height:100%;width:0%;background:#e03c3c;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-top:3px solid #22d3ee;transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(34,211,238,.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Barrages</span><span style="font-size:20px">🏞️</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#22d3ee" id="db-kpi-barrages">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">retenues incluses</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="db-bar-barrages" style="height:100%;width:0%;background:#22d3ee;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;border-top:3px solid #fbbf24;transition:transform .2s,box-shadow .2s" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(251,191,36,.2)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Population</span><span style="font-size:20px">👥</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:28px;font-weight:800;color:#fbbf24" id="db-kpi-pop">—</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">personnes desservies</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#fbbf24;border-radius:3px"></div></div>
+        </div>
+      </div>
+            <div style="padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;color:var(--muted)" id="db-last-update">—</span>
+        <span style="font-size:11px;color:var(--accent);font-weight:600">● Données en temps réel</span>
+      </div>
+      <div class="dashboard-grid">
+        <div class="dash-card wide"><div class="dash-card-title">📊 Répartition par type</div><canvas id="chartType" height="80"></canvas></div>
+        <div class="dash-card"><div class="dash-card-title">🔄 État global</div><canvas id="chartEtat" height="180"></canvas></div>
+        <div class="dash-card"><div class="dash-card-title">🌍 Couverture par région</div><canvas id="chartRegion" height="180"></canvas></div>
+        <div class="dash-card wide"><div class="dash-card-title">⚠️ Alertes actives</div><div id="alert-list"></div></div>
+        <div class="dash-card"><div class="dash-card-title">👥 Population desservie</div><div id="pop-stats" class="pop-stats"></div></div>
+        <div class="dash-card"><div class="dash-card-title">📈 Taux de fonctionnalité</div><canvas id="chartFonct" height="180"></canvas></div>
+        <div class="dash-card wide"><div class="dash-card-title">🗺️ Densité des points d'eau par région</div><div id="density-chart" style="padding:8px"></div></div>
+      </div>
+    </div>
+
+    <!-- INVENTAIRE -->
+    <div class="page" id="page-inventaire">
+      <!-- Header modernisé -->
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#00c896,#0077ff);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">📋</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Inventaire des Points d'Eau</div>
+              <div style="font-size:11px;color:var(--muted)">Burkina Faso — Données DGRE 2026</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="exportCSV()" style="padding:8px 16px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px">📥 Export CSV</button>
+            <button onclick="openImportModal()" style="padding:8px 16px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.3);border-radius:8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px">📤 Import CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs avec barres de progression -->
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Total</span>
+            <span style="font-size:16px">💧</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#0077ff" id="inv-kpi-total">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #00c896">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Fonctionnels</span>
+            <span style="font-size:16px">✅</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#00c896" id="inv-kpi-fonct">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="inv-bar-fonct" style="height:100%;width:0%;background:#00c896;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #e03c3c">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">En panne</span>
+            <span style="font-size:16px">🔴</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#e03c3c" id="inv-kpi-panne">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="inv-bar-panne" style="height:100%;width:0%;background:#e03c3c;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #22d3ee">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Barrages</span>
+            <span style="font-size:16px">🏞️</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#22d3ee" id="inv-kpi-barrages">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="inv-bar-barrages" style="height:100%;width:0%;background:#22d3ee;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #fbbf24">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Forages</span>
+            <span style="font-size:16px">⛏️</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#fbbf24" id="inv-kpi-forages">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="inv-bar-forages" style="height:100%;width:0%;background:#fbbf24;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #c084fc">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Population</span>
+            <span style="font-size:16px">👥</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#c084fc" id="inv-kpi-pop">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#c084fc;border-radius:3px"></div></div>
+        </div>
+      </div>
+
+      <!-- Filtres -->
+      <div class="inv-toolbar">
+        <input type="text" id="inv-search" placeholder="🔍 Rechercher par nom, commune..." oninput="renderTable()" style="width:260px"/>
+        <select id="inv-type" onchange="renderTable()">
+          <option value="">Tous types</option>
+          <option value="forage">🔩 Forage</option>
+          <option value="puits">🪣 Puits</option>
+          <option value="barrage">⛰️ Barrage</option>
+          <option value="retenue">🌊 Retenue</option>
+          <option value="borne">🚰 Borne</option>
+        </select>
+        <select id="inv-etat" onchange="renderTable()">
+          <option value="">Tous états</option>
+          <option value="fonctionnel">✅ Fonctionnel</option>
+          <option value="panne">🔴 En panne</option>
+          <option value="rehab">🔧 Réhabilitation</option>
+        </select>
+        <select id="inv-region" onchange="renderTable()">
+          <option value="">Toutes régions</option>
+          <option value="Centre">Centre</option>
+          <option value="Hauts-Bassins">Hauts-Bassins</option>
+          <option value="Sahel">Sahel</option>
+          <option value="Centre-Nord">Centre-Nord</option>
+          <option value="Centre-Est">Centre-Est</option>
+          <option value="Est">Est</option>
+          <option value="Cascades">Cascades</option>
+          <option value="Boucle du Mouhoun">Boucle du Mouhoun</option>
+          <option value="Plateau Central">Plateau Central</option>
+          <option value="Centre-Sud">Centre-Sud</option>
+        </select>
+      </div>
+
+      <!-- Barre actions groupées -->
+      <div style="padding:6px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <button id="inv-action-btn" onclick="supprimerSelectionInv()" style="display:none;padding:6px 12px;background:rgba(224,60,60,.15);color:#e03c3c;border:1px solid rgba(224,60,60,.3);border-radius:8px;font-size:12px;cursor:pointer">🗑️ Supprimer (0)</button>
+        <button onclick="exportSelectionCSV()" style="padding:6px 12px;background:rgba(0,200,150,.1);color:#00c896;border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:12px;cursor:pointer">�� Exporter sélection CSV</button>
+      </div>
+
+      <!-- Tableau -->
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th style="width:40px;text-align:center"><input type="checkbox" id="inv-select-all" onclick="toggleSelectAllInv(this)"/></th>
+          <th onclick="sortTable('code')" style="cursor:pointer">Code ↕</th>
+          <th onclick="sortTable('nom')" style="cursor:pointer">Nom ↕</th>
+          <th onclick="sortTable('type')" style="cursor:pointer">Type ↕</th>
+          <th onclick="sortTable('etat')" style="cursor:pointer">État ↕</th>
+          <th onclick="sortTable('region')" style="cursor:pointer">Région ↕</th>
+          <th onclick="sortTable('commune')" style="cursor:pointer">Commune ↕</th>
+          <th onclick="sortTable('pop_desservie')" style="cursor:pointer">Population ↕</th>
+          <th>Actions</th>
+        </tr></thead><tbody id="inv-tbody"></tbody></table>
+      </div>
+      <div class="table-footer" id="table-footer"></div>
+    </div>
+
+    <!-- ONEA -->
+    <div class="page" id="page-onea">
+
+      <!-- TOPBAR ONEA modernise -->
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:12px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#0077ff,#00c896);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🚰</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">ONEA — Gestion des Raccordements</div>
+              <div style="font-size:11px;color:var(--muted)">Office National de l'Eau et de l'Assainissement — Burkina Faso</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="text" id="onea-search" placeholder="Abonne, compteur..." oninput="filterOneaMap()" style="width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;outline:none"/>
+            <select id="onea-type" onchange="filterOneaMap()" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px">
+              <option value="">Tous types</option>
+              <option value="menage">Menage</option>
+              <option value="ecole">Ecole</option>
+              <option value="hopital">Hopital</option>
+              <option value="commerce">Commerce</option>
+              <option value="administration">Admin</option>
+            </select>
+            <select id="onea-etat" onchange="filterOneaMap()" style="padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px">
+              <option value="">Tous etats</option>
+              <option value="actif">Actif</option>
+              <option value="suspendu">Suspendu</option>
+              <option value="resilie">Resilie</option>
+            </select>
+            <button onclick="openRaccordementModal()" style="padding:6px 12px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Nouveau</button>
+            <button onclick="exportOneaCSV()" style="padding:6px 12px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:11px;cursor:pointer;white-space:nowrap">Export CSV</button>
+          </div>
+        </div>
+      </div>
+            <!-- KPIs ONEA -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Raccordements</span><span style="font-size:16px">🔌</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#0077ff" id="onea-total">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #00c896">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Actifs</span><span style="background:rgba(0,200,150,.2);color:#00c896;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">OK</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#00c896" id="onea-actif">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="onea-bar-actif" style="height:100%;width:0%;background:#00c896;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #ff6b35">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">m³ ce mois</span><span style="font-size:16px">💧</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#ff6b35" id="onea-conso">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#ff6b35;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #e03c3c">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Impayés FCFA</span><span style="background:rgba(224,60,60,.2);color:#e03c3c;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">ALERTE</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#e03c3c" id="onea-impaye">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#e03c3c;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #c084fc">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Facturé FCFA</span><span style="font-size:16px">��</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#c084fc" id="onea-montant">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#c084fc;border-radius:3px"></div></div>
+        </div>
+      </div>
+            <!-- LAYOUT PRINCIPAL -->
+      <div style="flex:1;display:grid;grid-template-columns:1fr 340px;overflow:hidden">
+
+        <!-- CARTE ONEA -->
+        <div style="position:relative;overflow:hidden">
+          <div id="onea-map" style="width:100%;height:100%"></div>
+
+          <!-- Légende carte -->
+          <div style="position:absolute;bottom:20px;right:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:11px;z-index:1000;color:var(--text)">
+            <div style="font-family:'Syne',sans-serif;font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Légende</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:10px;height:10px;background:#00c896;border-radius:50%"></div>Compteur actif</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:10px;height:10px;background:#e03c3c;border-radius:50%"></div>Compteur suspendu</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><div style="width:10px;height:10px;background:#0077ff;border-radius:50%"></div>Barrage/retenue</div>
+            <div style="display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;background:#fbbf24;border-radius:2px;opacity:.6"></div>Zone forte conso</div>
+          </div>
+
+          <!-- Contrôles carte -->
+          <div style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:6px;z-index:1000">
+            <button onclick="toggleOneaBasemap()" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;cursor:pointer">🛰️ Satellite</button>
+            <button onclick="toggleHeatmap()" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;cursor:pointer" id="btn-heatmap">🌡️ Heatmap</button>
+            <button onclick="oneaMap&&oneaMap.setView([12.36,-1.53],7)" style="padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:11px;cursor:pointer">🎯 Recentrer</button>
+            <button onclick="toggleZonesPrioritaires(this)" id="btn-zones-prior" style="padding:6px 10px;background:rgba(245,158,11,.2);border:1px solid rgba(245,158,11,.4);border-radius:8px;color:#f59e0b;font-size:11px;cursor:pointer">⚡ Zones prioritaires</button>
+            <button onclick="toggleDetectionFuites()" id="btn-fuites" style="padding:6px 10px;background:rgba(224,60,60,.18);border:1px solid rgba(224,60,60,.4);border-radius:8px;color:#e03c3c;font-size:11px;cursor:pointer">💧 Détection fuites</button>
+          </div>
+        </div>
+
+        <!-- PANNEAU DROIT -->
+        <div style="background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+
+          <!-- Onglets -->
+          <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
+            <button onclick="switchOneaTab('liste',this)" class="onea-tab active" style="flex:1;padding:10px;border:none;background:transparent;color:var(--accent);font-size:12px;cursor:pointer;border-bottom:2px solid var(--accent)">📋 Liste</button>
+            <button onclick="switchOneaTab('alertes',this)" class="onea-tab" style="flex:1;padding:10px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer">⚠️ Alertes</button>
+            <button onclick="switchOneaTab('stats',this)" class="onea-tab" style="flex:1;padding:10px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer">📊 Stats</button>
+          </div>
+
+          <!-- Tab Liste -->
+          <div id="onea-tab-liste" style="flex:1;overflow-y:auto;padding:8px">
+            <div id="onea-list-container"></div>
+          </div>
+
+          <!-- Tab Alertes -->
+          <div id="onea-tab-alertes" style="flex:1;overflow-y:auto;padding:8px;display:none">
+            <div id="onea-alertes-container">
+              <div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Chargement...</div>
+            </div>
+          </div>
+
+          <!-- Tab Stats -->
+          <div id="onea-tab-stats" style="flex:1;overflow-y:auto;padding:8px;display:none">
+            <div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;letter-spacing:.5px">📊 Répartition par type</div>
+            <canvas id="onea-chart-type" style="width:100%;max-height:160px;margin-bottom:16px"></canvas>
+            <div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;letter-spacing:.5px">💧 Consommation mensuelle (m³)</div>
+            <canvas id="onea-chart-conso" style="width:100%;max-height:160px;margin-bottom:16px"></canvas>
+            <div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;letter-spacing:.5px">💰 Taux de recouvrement</div>
+            <div id="onea-recouvrement" style="background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border);margin-bottom:16px">
+              <div style="text-align:center;color:var(--muted);font-size:12px">Chargement...</div>
+            </div>
+            <div style="font-size:10px;text-transform:uppercase;color:var(--muted);margin-bottom:6px;letter-spacing:.5px">🛰️ Prévision consommation — Analyse satellitaire (NDWI)</div>
+            <div id="onea-ndvi-prevision" style="background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border)">
+              <div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:8px">Analyse satellite requise</div>
+              <button onclick="calculerPrevisionNDVI()" style="width:100%;padding:7px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:11px;cursor:pointer;font-weight:600">
+                🌿 Calculer prévision NDVI Sentinel-2
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Detail abonné panel (slide-in) -->
+      <div id="onea-detail-panel" style="position:absolute;bottom:0;left:0;right:340px;background:var(--surface);border-top:2px solid var(--accent);transform:translateY(100%);transition:.3s;z-index:2000;padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:center">
+        <div>
+          <div style="font-size:11px;color:var(--muted)">Abonné</div>
+          <div style="font-weight:600;font-size:14px" id="od-nom">—</div>
+          <div style="font-size:11px;color:var(--accent)" id="od-compteur">—</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted)">Dernière consommation</div>
+          <div style="font-weight:700;font-size:18px;color:#ff6b35" id="od-conso">— m³</div>
+          <div style="font-size:11px;color:var(--muted)" id="od-periode">—</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted)">Montant facture</div>
+          <div style="font-weight:700;font-size:16px;color:#e03c3c" id="od-montant">— FCFA</div>
+          <div style="font-size:11px" id="od-statut">—</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button id="od-releve-btn" onclick="" style="padding:7px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">📊 Relevé</button>
+          <button id="od-facture-btn" onclick="" style="padding:7px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.2);border-radius:8px;font-size:11px;cursor:pointer">🖨️ Facture</button>
+          <button id="od-payer-btn" onclick="" style="padding:7px;background:rgba(0,200,150,.1);color:#00c896;border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:11px;cursor:pointer;display:none">✅ Marquer payé</button>
+          <button onclick="closeOneaDetail()" style="padding:7px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:11px;cursor:pointer">✕ Fermer</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- INTERVENTIONS -->
+    <div class="page" id="page-interventions">
+      <!-- Header modernisé -->
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#ff6b35,#fbbf24);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🔧</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Gestion des Interventions</div>
+              <div style="font-size:11px;color:var(--muted)">Suivi des travaux hydrauliques — Burkina Faso</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="exportInterventionsCSV()" style="padding:8px 16px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">📥 Export CSV</button>
+            <button onclick="openInterventionModal()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;cursor:pointer;font-weight:700">＋ Nouvelle intervention</button>
+          </div>
+        </div>
+      </div>
+      <!-- KPIs avec badges priorité -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Total</span>
+            <span style="font-size:16px">🔧</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#0077ff" id="interv-total">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #ff6b35">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">En cours</span>
+            <span style="background:rgba(255,107,53,.2);color:#ff6b35;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px">ACTIF</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#ff6b35" id="interv-encours">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="ibar-encours" style="height:100%;width:0%;background:#ff6b35;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #fbbf24">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Planifiées</span>
+            <span style="background:rgba(251,191,36,.2);color:#fbbf24;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px">PLANIF</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#fbbf24" id="interv-planifie">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="ibar-planifie" style="height:100%;width:0%;background:#fbbf24;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #00c896">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Terminées</span>
+            <span style="background:rgba(0,200,150,.2);color:#00c896;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px">DONE</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#00c896" id="interv-termine">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="ibar-termine" style="height:100%;width:0%;background:#00c896;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #e03c3c">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;color:var(--muted)">Coût total</span>
+            <span style="font-size:16px">💰</span>
+          </div>
+          <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#e03c3c" id="interv-cout">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#e03c3c;border-radius:3px"></div></div>
+        </div>
+      </div>
+      <div class="inv-toolbar">
+        <input type="text" id="interv-search" placeholder="🔍 Rechercher..." oninput="filterInterventions()" style="width:250px"/>
+        <select id="interv-statut" onchange="filterInterventions()">
+          <option value="">Tous statuts</option>
+          <option value="en_cours">En cours</option>
+          <option value="planifie">Planifié</option>
+          <option value="termine">Terminé</option>
+        </select>
+        <select id="interv-type" onchange="filterInterventions()">
+          <option value="">Tous types</option>
+          <option value="reparation">Réparation</option>
+          <option value="maintenance">Maintenance</option>
+          <option value="urgence">Urgence</option>
+          <option value="inspection">Inspection</option>
+          <option value="rehabilitation">Réhabilitation</option>
+        </select>
+        <select id="interv-periode" onchange="filterInterventions()">
+          <option value="">Toutes périodes</option>
+          <option value="mois">Ce mois</option>
+          <option value="trimestre">Ce trimestre</option>
+          <option value="annee">Cette année</option>
+        </select>
+      </div>
+      <!-- Actions groupées -->
+      <div style="padding:6px 16px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
+        <button id="interv-action-btn" onclick="supprimerSelectionInterv()" style="display:none;padding:6px 12px;background:rgba(224,60,60,.15);color:#e03c3c;border:1px solid rgba(224,60,60,.3);border-radius:8px;font-size:12px;cursor:pointer">🗑️ Supprimer (0)</button>
+        <button onclick="exportIntervCSV()" style="padding:6px 12px;background:rgba(0,200,150,.1);color:#00c896;border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:12px;cursor:pointer">📥 Export CSV sélection</button>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th style="width:40px;text-align:center"><input type="checkbox" id="interv-select-all" onclick="toggleSelectAllInterv(this)"/></th>
+          <th style="cursor:pointer" onclick="sortInterventions('date_intervention')">Date ↕</th>
+          <th>Point d eau</th>
+          <th style="cursor:pointer" onclick="sortInterventions('type_intervention')">Type ↕</th>
+          <th>Description</th>
+          <th style="cursor:pointer" onclick="sortInterventions('technicien')">Technicien ↕</th>
+          <th style="cursor:pointer" onclick="sortInterventions('cout_fcfa')">Coût (FCFA) ↕</th>
+          <th style="cursor:pointer" onclick="sortInterventions('statut')">Statut ↕</th>
+          <th>Actions</th>
+        </tr></thead><tbody id="interv-tbody"></tbody></table>
+      </div>
+      <div class="table-footer" id="interv-footer"></div>
+    </div>
+
+    <!-- ALERTES -->
+    <div class="page" id="page-alertes">
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#e03c3c,#ff6b35);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;animation:pulse 2s infinite">⚠️</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Alertes & Notifications</div>
+              <div style="font-size:11px;color:var(--muted)">Surveillance en temps réel — Faso Kuilga</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="loadAlertes()" style="padding:8px 16px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">🔄 Actualiser</button>
+            <button onclick="exportAlertesCSV()" style="padding:8px 16px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">📥 Export CSV</button>
+          </div>
+        </div>
+      </div>
+      <!-- KPIs Alertes -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #e03c3c">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">En panne</span><span style="background:rgba(224,60,60,.2);color:#e03c3c;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;animation:pulse 1.5s infinite">URGENT</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:#e03c3c" id="alerte-pannes">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="alerte-bar-pannes" style="height:100%;width:0%;background:#e03c3c;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #ff6b35">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Réhabilitation</span><span style="background:rgba(255,107,53,.2);color:#ff6b35;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">EN COURS</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:#ff6b35" id="alerte-rehabs">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="alerte-bar-rehabs" style="height:100%;width:0%;background:#ff6b35;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #fbbf24">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Pers. affectées</span><span style="font-size:16px">👥</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:24px;font-weight:800;color:#fbbf24" id="alerte-population">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#fbbf24;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Coût estimé</span><span style="font-size:16px">💰</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:#0077ff" id="alerte-cout">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+      </div>
+      <!-- Filtres -->
+      <div class="inv-toolbar">
+        <select id="alerte-filtre" onchange="filterAlertes()">
+          <option value="tout">Toutes les alertes</option>
+          <option value="panne">Pannes uniquement</option>
+          <option value="rehab">Réhabilitations</option>
+          <option value="critique">Critique (pop > 500)</option>
+        </select>
+        <select id="alerte-region" onchange="filterAlertes()">
+          <option value="">Toutes les régions</option>
+        </select>
+      </div>
+      <!-- Contenu alertes -->
+      <div id="alertes-container" style="padding:16px;overflow-y:auto;flex:1"></div>
+    </div>
+    <!-- ONEA -->
+    <div class="page" id="page-utilisateurs">
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#c084fc,#0077ff);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">👥</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Gestion des Utilisateurs</div>
+              <div style="font-size:11px;color:var(--muted)">Contrôle des accès — Faso Kuilga</div>
+            </div>
+          </div>
+          <button onclick="openUserModal()" style="padding:8px 16px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;cursor:pointer;font-weight:700">＋ Nouvel utilisateur</button>
+        </div>
+      </div>
+
+      <!-- KPIs Utilisateurs -->
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Total</span><span style="font-size:16px">👥</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#0077ff" id="users-total">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #00c896">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Actifs</span><span style="background:rgba(0,200,150,.2);color:#00c896;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">EN LIGNE</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#00c896" id="users-actifs">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="users-bar-actifs" style="height:100%;width:0%;background:#00c896;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #c084fc">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Admins</span><span style="background:rgba(192,132,252,.2);color:#c084fc;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">ADMIN</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#c084fc" id="users-admins">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="users-bar-admins" style="height:100%;width:0%;background:#c084fc;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #fbbf24">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Techniciens</span><span style="font-size:16px">🔧</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#fbbf24" id="users-techniciens">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="users-bar-tech" style="height:100%;width:0%;background:#fbbf24;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #22d3ee">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Lecteurs</span><span style="font-size:16px">👁️</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#22d3ee" id="users-lecteurs">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="users-bar-lect" style="height:100%;width:0%;background:#22d3ee;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+      </div>
+            <!-- Filtres + Actions groupées -->
+      <div class="inv-toolbar">
+        <input type="text" id="users-search" placeholder="🔍 Rechercher utilisateur..." oninput="filterUsers()" style="width:220px"/>
+        <select id="users-role" onchange="filterUsers()">
+          <option value="">Tous les rôles</option>
+          <option value="admin">Administrateur</option>
+          <option value="technicien">Technicien</option>
+          <option value="lecteur">Lecteur</option>
+        </select>
+        <select id="users-statut" onchange="filterUsers()">
+          <option value="">Tous statuts</option>
+          <option value="1">Actif</option>
+          <option value="0">Inactif</option>
+        </select>
+        <button onclick="exportUsersCSV()" style="padding:7px 12px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:12px;cursor:pointer">📥 Export CSV</button>
+        <button id="btn-delete-selected" onclick="supprimerSelectionUsers()" style="padding:7px 12px;background:rgba(224,60,60,.1);color:#e03c3c;border:1px solid rgba(224,60,60,.2);border-radius:8px;font-size:12px;cursor:pointer;display:none">🗑️ Supprimer sélection</button>
+      </div>
+
+      <!-- Tableau -->
+      <div class="table-wrap">
+        <table><thead><tr>
+          <th style="width:40px"><input type="checkbox" id="users-select-all" onclick="toggleSelectAllUsers(this)"/></th>
+          <th>Utilisateur</th>
+          <th>Email</th>
+          <th>Rôle</th>
+          <th>Statut</th>
+          <th>Actions</th>
+        </tr></thead><tbody id="users-tbody"></tbody></table>
+      </div>
+      <div class="table-footer" id="users-footer"></div>
+      <!-- Graphique répartition rôles -->
+      <div style="padding:16px;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;font-weight:600">Répartition des rôles</div>
+        <div style="display:flex;gap:16px;align-items:center">
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:#c084fc">Admins</span><span id="role-bar-admin-pct" style="color:#c084fc;font-weight:700">—</span></div>
+            <div style="height:6px;background:var(--border);border-radius:3px;margin-bottom:8px"><div id="role-bar-admin" style="height:100%;width:0%;background:#c084fc;border-radius:3px;transition:width .8s ease"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:#fbbf24">Techniciens</span><span id="role-bar-tech-pct" style="color:#fbbf24;font-weight:700">—</span></div>
+            <div style="height:6px;background:var(--border);border-radius:3px;margin-bottom:8px"><div id="role-bar-tech" style="height:100%;width:0%;background:#fbbf24;border-radius:3px;transition:width .8s ease"></div></div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:#22d3ee">Lecteurs</span><span id="role-bar-lect-pct" style="color:#22d3ee;font-weight:700">—</span></div>
+            <div style="height:6px;background:var(--border);border-radius:3px"><div id="role-bar-lect" style="height:100%;width:0%;background:#22d3ee;border-radius:3px;transition:width .8s ease"></div></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-shrink:0">
+            <div style="text-align:center;background:rgba(192,132,252,.1);border:1px solid rgba(192,132,252,.2);border-radius:10px;padding:10px 16px">
+              <div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:#c084fc" id="role-count-admin">—</div>
+              <div style="font-size:10px;color:var(--muted)">Admins</div>
+            </div>
+            <div style="text-align:center;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);border-radius:10px;padding:10px 16px">
+              <div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:#fbbf24" id="role-count-tech">—</div>
+              <div style="font-size:10px;color:var(--muted)">Techniciens</div>
+            </div>
+            <div style="text-align:center;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.2);border-radius:10px;padding:10px 16px">
+              <div style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:#22d3ee" id="role-count-lect">—</div>
+              <div style="font-size:10px;color:var(--muted)">Lecteurs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RAPPORTS -->
+    <div class="page" id="page-rapports">
+      <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#0077ff,#c084fc);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Génération de Rapports</div>
+              <div style="font-size:11px;color:var(--muted)" id="rapport-date">Faso Kuilga — Burkina Faso</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.2);border-radius:8px;padding:6px 12px">
+            <span style="width:6px;height:6px;background:#00c896;border-radius:50%;display:inline-block;animation:pulse 1.5s infinite"></span>
+            <span style="font-size:11px;color:var(--accent);font-weight:600">Données en temps réel</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPIs Rapports -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #0077ff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Points d'eau</span><span style="font-size:16px">💧</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#0077ff" id="rpt-total">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#0077ff;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #e03c3c">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">En panne</span><span style="background:rgba(224,60,60,.2);color:#e03c3c;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px">URGENT</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#e03c3c" id="rpt-pannes">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div id="rpt-bar-pannes" style="height:100%;width:0%;background:#e03c3c;border-radius:3px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #00c896">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Raccordements</span><span style="font-size:16px">🚰</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#00c896" id="rpt-raccordements">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#00c896;border-radius:3px"></div></div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;border-top:2px solid #ff6b35">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">Interventions</span><span style="font-size:16px">��</span></div>
+          <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;color:#ff6b35" id="rpt-interventions">—</div>
+          <div style="height:3px;background:var(--border);border-radius:3px;margin-top:8px"><div style="height:100%;width:100%;background:#ff6b35;border-radius:3px"></div></div>
+        </div>
+      </div>
+            <!-- Grille rapports -->
+      <div style="padding:16px;overflow-y:auto;flex:1">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+
+          <!-- Rapport Général -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #0077ff"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapport('general')">
+            <div style="font-size:32px;margin-bottom:12px">📊</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#0077ff">Rapport Général</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Synthèse complète de tous les points d eau du Burkina Faso avec statistiques et cartographie</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(0,119,255,.08);border-radius:8px">
+              <span id="rpt-stat-general">—</span>
+            </div>
+            <button style="width:100%;padding:8px;background:#0077ff;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+
+          <!-- Rapport Pannes -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #e03c3c"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapport('pannes')">
+            <div style="font-size:32px;margin-bottom:12px">🔴</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#e03c3c">Rapport des Pannes</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Liste détaillée des points d eau en panne avec population affectée et coûts estimés</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(224,60,60,.08);border-radius:8px">
+              <span id="rpt-stat-pannes">—</span>
+            </div>
+            <button style="width:100%;padding:8px;background:#e03c3c;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+
+          <!-- Rapport ONEA -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #00c896"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapport('onea')">
+            <div style="font-size:32px;margin-bottom:12px">🚰</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#00c896">Rapport ONEA</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">État des raccordements, consommations mensuelles et facturation ONEA Burkina Faso</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(0,200,150,.08);border-radius:8px">
+              <span id="rpt-stat-onea">—</span>
+            </div>
+            <button style="width:100%;padding:8px;background:#00c896;color:#000;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+
+          <!-- Rapport Région -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #fbbf24"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapport('region')">
+            <div style="font-size:32px;margin-bottom:12px">🌍</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#fbbf24">Rapport par Région</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Analyse de la couverture hydraulique par région administrative du Burkina Faso</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(251,191,36,.08);border-radius:8px">
+              <span id="rpt-stat-region">—</span>
+            </div>
+            <button style="width:100%;padding:8px;background:#fbbf24;color:#000;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+
+          <!-- Rapport Interventions -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #ff6b35"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapport('interventions')">
+            <div style="font-size:32px;margin-bottom:12px">🔧</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#ff6b35">Rapport Interventions</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Historique des interventions techniques avec coûts et statuts des travaux réalisés</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(255,107,53,.08);border-radius:8px">
+              <span id="rpt-stat-interventions">—</span>
+            </div>
+            <button style="width:100%;padding:8px;background:#ff6b35;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+
+          <!-- Rapport Teledetection -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #0077ff"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="genererRapportTeledetection()">
+            <div style="font-size:32px;margin-bottom:12px">🛰️</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#0077ff">Rapport Télédétection</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Résultats de prospection Sentinel-2 — zones favorables forages, sites barrages, indices NDWI/NDVI</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(0,119,255,.08);border-radius:8px">
+              Données Copernicus ESA — Sentinel-2 L2A
+            </div>
+            <button style="width:100%;padding:8px;background:#0077ff;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📄 Générer PDF
+            </button>
+          </div>
+          <!-- Export CSV -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:.2s;border-top:3px solid #c084fc"
+            onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 24px rgba(0,0,0,.3)'"
+            onmouseout="this.style.transform='none';this.style.boxShadow='none'"
+            onclick="exportCSV()">
+            <div style="font-size:32px;margin-bottom:12px">📥</div>
+            <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:#c084fc">Export CSV</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5">Exporter toutes les données en format tableur compatible Excel et LibreOffice</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:8px;background:rgba(192,132,252,.08);border-radius:8px">
+              Format CSV — Compatible Excel, LibreOffice
+            </div>
+            <button style="width:100%;padding:8px;background:#c084fc;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+              📥 Exporter CSV
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- PARAMETRES -->
+    <div class="page" id="page-parametres">
+      <div class="module-header">
+        <div class="module-title">⚙️ Paramètres — Faso Kuilga BF</div>
+      </div>
+
+      <div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px">
+
+        <!-- LIGNE 1 : Profil + Sécurité -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+          <!-- Mon Profil -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="width:42px;height:42px;border-radius:50%;background:rgba(0,119,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px">👤</div>
+              <div>
+                <div style="font-weight:700;font-size:15px">Mon Profil</div>
+                <div style="font-size:11px;color:var(--muted)">Informations du compte connecté</div>
+              </div>
+            </div>
+            <div id="profil-info" style="margin-bottom:16px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Nouveau nom</label><input type="text" id="param-nom" placeholder="Votre nom"/></div>
+              <div class="form-row" style="margin:0"><label style="font-size:11px">Rôle</label><input type="text" id="param-role" disabled style="opacity:.5;cursor:not-allowed"/></div>
+            </div>
+            <div class="form-row" style="margin:8px 0 12px"><label style="font-size:11px">Email</label><input type="email" id="param-email" placeholder="email@sig-bf.com"/></div>
+            <button onclick="sauvegarderProfil()" style="width:100%;padding:9px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">💾 Sauvegarder le profil</button>
+          </div>
+
+          <!-- Sécurité -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="width:42px;height:42px;border-radius:50%;background:rgba(224,60,60,.12);display:flex;align-items:center;justify-content:center;font-size:20px">🔒</div>
+              <div>
+                <div style="font-weight:700;font-size:15px">Sécurité</div>
+                <div style="font-size:11px;color:var(--muted)">Changer le mot de passe</div>
+              </div>
+            </div>
+            <div class="form-row" style="margin-bottom:10px"><label style="font-size:11px">Mot de passe actuel</label><input type="password" id="pwd-actuel" placeholder="••••••••"/></div>
+            <div class="form-row" style="margin-bottom:10px"><label style="font-size:11px">Nouveau mot de passe</label><input type="password" id="new-pwd" placeholder="••••••••"/></div>
+            <div class="form-row" style="margin-bottom:14px"><label style="font-size:11px">Confirmer le nouveau mot de passe</label><input type="password" id="confirm-pwd" placeholder="••••••••"/></div>
+            <button onclick="changerMotDePasse()" style="width:100%;padding:9px;background:rgba(224,60,60,.1);color:#e03c3c;border:1px solid rgba(224,60,60,.2);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🔒 Changer le mot de passe</button>
+          </div>
+        </div>
+
+        <!-- LIGNE 2 : Stats système + À propos -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+          <!-- Statistiques système -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="width:42px;height:42px;border-radius:50%;background:rgba(0,200,150,.12);display:flex;align-items:center;justify-content:center;font-size:20px">📊</div>
+              <div>
+                <div style="font-weight:700;font-size:15px">Statistiques du système</div>
+                <div style="font-size:11px;color:var(--muted)">Données en temps réel</div>
+              </div>
+            </div>
+            <div id="sys-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+          </div>
+
+          <!-- À propos -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden">
+            <!-- Header gradient -->
+            <div style="background:linear-gradient(135deg,rgba(0,200,150,.15),rgba(0,119,255,.10));padding:20px;border-bottom:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:14px">
+                <div style="width:52px;height:52px;background:linear-gradient(135deg,#00c896,#0077ff);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 16px rgba(0,200,150,.3)">💧</div>
+                <div>
+                  <div style="font-family:Syne,sans-serif;font-weight:800;font-size:18px">Faso <span style="color:var(--accent)">Kuilga</span> BF</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">Version 1.0.0 — Juin 2026</div>
+                </div>
+                <div style="margin-left:auto;background:rgba(0,200,150,.1);border:1px solid rgba(0,200,150,.3);border-radius:20px;padding:4px 12px;font-size:11px;color:var(--accent);font-weight:600">✅ Stable</div>
+              </div>
+              <div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6">
+                Système d'Information Géographique pour la gestion, le suivi et l'analyse par télédétection Sentinel-2 des points d'eau du Burkina Faso. Développé dans le cadre d'un mémoire de Licence en Géomatique.
+              </div>
+            </div>
+            <!-- Contenu -->
+            <div style="padding:16px 20px">
+              <!-- Auteur -->
+              <div style="background:linear-gradient(135deg,rgba(0,200,150,.08),rgba(0,119,255,.05));border:1px solid rgba(0,200,150,.2);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+                <div style="width:38px;height:38px;background:linear-gradient(135deg,#00c896,#0077ff);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👨‍💻</div>
+                <div>
+                  <div style="font-size:12px;font-weight:700">Ouedraogo Abdoul Rachid Mickael</div>
+                  <div style="font-size:11px;color:var(--muted)">Licence 3 Géomatique · UV-BF · 2025-2026</div>
+                </div>
+              </div>
+              <!-- Encadreur -->
+              <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+                <div style="width:38px;height:38px;background:rgba(0,119,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👩‍🏫</div>
+                <div>
+                  <div style="font-size:12px;font-weight:700">Dr SINON AFFOUSSATOU</div>
+                  <div style="font-size:11px;color:var(--muted)">Directeur de mémoire · UV-BF</div>
+                </div>
+              </div>
+              <!-- Stack technique -->
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600">Stack technique</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px">
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14px">🐍</span><div><div style="font-size:11px;font-weight:600">FastAPI</div><div style="font-size:10px;color:var(--muted)">Python 3.14</div></div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14px">🗄️</span><div><div style="font-size:11px;font-weight:600">PostgreSQL 17</div><div style="font-size:10px;color:var(--muted)">Base de données</div></div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14px">🗺️</span><div><div style="font-size:11px;font-weight:600">Leaflet.js 1.9</div><div style="font-size:10px;color:var(--muted)">Cartographie web</div></div>
+                </div>
+                <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+                  <span style="font-size:14px">🛰️</span><div><div style="font-size:11px;font-weight:600">Sentinel-2 ESA</div><div style="font-size:10px;color:var(--muted)">Télédétection</div></div>
+                </div>
+              </div>
+              <!-- Stats rapides -->
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                <div style="background:rgba(0,200,150,.08);border:1px solid rgba(0,200,150,.2);border-radius:8px;padding:8px;text-align:center">
+                  <div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:var(--accent)" id="ap-total">—</div>
+                  <div style="font-size:10px;color:var(--muted)">Points eau</div>
+                </div>
+                <div style="background:rgba(0,119,255,.08);border:1px solid rgba(0,119,255,.2);border-radius:8px;padding:8px;text-align:center">
+                  <div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#0077ff">13</div>
+                  <div style="font-size:10px;color:var(--muted)">Régions</div>
+                </div>
+                <div style="background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:8px;text-align:center">
+                  <div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800;color:#fbbf24" id="ap-zones">—</div>
+                  <div style="font-size:10px;color:var(--muted)">Zones SIG</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIGNE 3 : Données + Connexion Sentinel -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+          <!-- Gestion des données -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="width:42px;height:42px;border-radius:50%;background:rgba(251,191,36,.12);display:flex;align-items:center;justify-content:center;font-size:20px">🗄️</div>
+              <div>
+                <div style="font-weight:700;font-size:15px">Gestion des données</div>
+                <div style="font-size:11px;color:var(--muted)">Export et sauvegarde</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button onclick="exportCSV()" style="width:100%;padding:9px;background:rgba(0,200,150,.1);color:#00c896;border:1px solid rgba(0,200,150,.2);border-radius:8px;font-size:13px;cursor:pointer;text-align:left">📥 Exporter tous les points d'eau (CSV)</button>
+              <button onclick="exportUsersCSV()" style="width:100%;padding:9px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.2);border-radius:8px;font-size:13px;cursor:pointer;text-align:left">👥 Exporter les utilisateurs (CSV)</button>
+              <button onclick="exportOneaCSV()" style="width:100%;padding:9px;background:rgba(192,132,252,.1);color:#c084fc;border:1px solid rgba(192,132,252,.2);border-radius:8px;font-size:13px;cursor:pointer;text-align:left">🚰 Exporter les raccordements ONEA (CSV)</button>
+              <button onclick="exportInterventionsCSV()" style="width:100%;padding:9px;background:rgba(255,107,53,.1);color:#ff6b35;border:1px solid rgba(255,107,53,.2);border-radius:8px;font-size:13px;cursor:pointer;text-align:left">🔧 Exporter les interventions (CSV)</button>
+            </div>
+          </div>
+
+          <!-- Connexion Sentinel Hub -->
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+              <div style="width:42px;height:42px;border-radius:50%;background:rgba(34,211,238,.12);display:flex;align-items:center;justify-content:center;font-size:20px">🛰️</div>
+              <div>
+                <div style="font-weight:700;font-size:15px">Connexion Sentinel Hub</div>
+                <div style="font-size:11px;color:var(--muted)">API Copernicus ESA — Programme Faso Kuilga</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:8px">
+                <span style="font-size:12px;color:var(--muted)">Statut API</span>
+                <span id="sentinel-status" style="font-size:12px;font-weight:600;color:#00c896">🟢 Connecté</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:8px">
+                <span style="font-size:12px;color:var(--muted)">Programme</span>
+                <span style="font-size:12px;font-weight:600">Copernicus CDSE</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:8px">
+                <span style="font-size:12px;color:var(--muted)">Satellite</span>
+                <span style="font-size:12px;font-weight:600">Sentinel-2 L2A · 10m</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--surface2);border-radius:8px">
+                <span style="font-size:12px;color:var(--muted)">Indices disponibles</span>
+                <span style="font-size:12px;font-weight:600">NDWI · NDVI</span>
+              </div>
+              <button onclick="testerConnexionSentinel()" style="width:100%;padding:9px;background:rgba(34,211,238,.1);color:#22d3ee;border:1px solid rgba(34,211,238,.2);border-radius:8px;font-size:13px;cursor:pointer;margin-top:4px">🔄 Tester la connexion Sentinel Hub</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="detail-panel" id="detail-panel">
+    <div class="dp-header">
+      <div id="dp-title" class="dp-title">Sélectionner un point</div>
+      <div id="dp-sub" class="dp-sub">Cliquez sur un marqueur</div>
+      <button class="dp-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div id="dp-body" class="dp-body">
+      <div class="dp-empty"><div style="font-size:40px">📍</div><div>Cliquez sur un point d'eau pour afficher ses détails</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header"><h2>➕ Nouveau Point d'Eau</h2><button onclick="closeModal()" class="modal-close">✕</button></div>
+    <div class="modal-tabs">
+      <div class="mtab active" onclick="switchMTab(this,'general')">Général</div>
+      <div class="mtab" onclick="switchMTab(this,'technique')">Technique</div>
+    </div>
+    <div id="mtab-general">
+      <div class="form-grid">
+        <div class="form-row"><label>Code *</label><input type="text" id="f-code" placeholder="FBF-031"/></div>
+        <div class="form-row"><label>Type *</label><select id="f-type"><option value="forage">⛏️ Forage</option><option value="puits">🪣 Puits</option><option value="barrage">🏞️ Barrage</option><option value="retenue">💦 Retenue</option><option value="borne">🚰 Borne</option></select></div>
+      </div>
+      <div class="form-row"><label>Nom *</label><input type="text" id="f-nom" placeholder="Forage de Ziniaré"/></div>
+      <div class="form-grid">
+        <div class="form-row"><label>Région</label><select id="f-region"><option>Centre</option><option>Nord</option><option>Sahel</option><option>Hauts-Bassins</option><option>Est</option><option>Boucle du Mouhoun</option><option>Centre-Nord</option><option>Centre-Est</option><option>Centre-Sud</option><option>Cascades</option></select></div>
+        <div class="form-row"><label>État</label><select id="f-etat"><option value="fonctionnel">✅ Fonctionnel</option><option value="panne">🔴 En panne</option><option value="rehab">🔧 Réhabilitation</option></select></div>
+      </div>
+      <div class="form-row"><label>Commune</label><input type="text" id="f-commune" placeholder="Commune de..."/></div>
+      <div class="form-grid">
+        <div class="form-row"><label>Latitude *</label><input type="text" id="f-lat" placeholder="12.3678"/></div>
+        <div class="form-row"><label>Longitude *</label><input type="text" id="f-lng" placeholder="-1.5321"/></div>
+      </div>
+      <div class="form-row"><label>Population desservie</label><input type="text" id="f-pop" placeholder="350"/></div>
+    </div>
+    <div id="mtab-technique" style="display:none">
+      <div class="form-grid">
+        <div class="form-row"><label>Profondeur (m)</label><input type="text" id="f-prof" placeholder="45"/></div>
+        <div class="form-row"><label>Débit (m³/h)</label><input type="text" id="f-debit" placeholder="2.5"/></div>
+      </div>
+      <div class="form-row"><label>Type de pompe</label><select id="f-pompe"><option>PMH</option><option>Pompe solaire</option><option>Pompe électrique</option><option>Sans pompe</option></select></div>
+      <div class="form-row"><label>Qualité eau</label><select id="f-qualite"><option value="bonne">Bonne</option><option value="acceptable">Acceptable</option><option value="mauvaise">Mauvaise</option></select></div>
+      <div class="form-row"><label>Observations</label><textarea id="f-obs" rows="3" placeholder="Remarques..."></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="savePoint()">💾 Enregistrer</button>
+      <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-header"><h2 id="user-modal-title">👤 Nouvel Utilisateur</h2><button onclick="closeUserModal()" class="modal-close">✕</button></div>
+    <input type="hidden" id="u-id" value=""/>
+    <div class="form-row"><label>Nom complet *</label><input type="text" id="u-nom" placeholder="Nom Prénom"/></div>
+    <div class="form-row"><label>Email *</label><input type="email" id="u-email" placeholder="email@sig-bf.com"/></div>
+    <div class="form-row"><label>Mot de passe *</label><input type="password" id="u-pwd" placeholder="••••••••"/></div>
+    <div class="form-row"><label>Rôle</label><select id="u-role"><option value="lecteur">👁️ Lecteur</option><option value="technicien">🔧 Technicien</option><option value="admin">👑 Administrateur</option></select></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="user-save-btn" onclick="saveUser()">💾 Créer le compte</button>
+      <button class="btn-secondary" onclick="closeUserModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-raccordement">
+  <div class="modal">
+    <div class="modal-header"><h2>🔌 Nouveau Raccordement ONEA</h2><button onclick="closeRaccordementModal()" class="modal-close">✕</button></div>
+    <div class="form-grid">
+      <div class="form-row"><label>N° Compteur *</label><input type="text" id="r-compteur" placeholder="CPT-001"/></div>
+      <div class="form-row"><label>Type abonné</label><select id="r-type"><option value="menage">Ménage</option><option value="ecole">École</option><option value="hopital">Hôpital/CSPS</option><option value="commerce">Commerce</option><option value="administration">Administration</option></select></div>
+    </div>
+    <div class="form-row"><label>Nom abonné *</label><input type="text" id="r-nom" placeholder="Nom de l'abonné"/></div>
+    <div class="form-row"><label>Adresse</label><input type="text" id="r-adresse" placeholder="Adresse complète"/></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Région</label><select id="r-region"><option>Centre</option><option>Nord</option><option>Sahel</option><option>Hauts-Bassins</option><option>Est</option><option>Boucle du Mouhoun</option><option>Centre-Nord</option><option>Centre-Est</option><option>Centre-Sud</option><option>Cascades</option></select></div>
+      <div class="form-row"><label>Commune</label><input type="text" id="r-commune" placeholder="Commune"/></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Latitude</label><input type="text" id="r-lat" placeholder="12.3678"/></div>
+      <div class="form-row"><label>Longitude</label><input type="text" id="r-lng" placeholder="-1.5321"/></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-row"><label>Date raccordement</label><input type="date" id="r-date"/></div>
+<div class="form-row"><label>Index initial compteur (m³)</label><input type="number" id="r-index" placeholder="Ex: 0 ou 1245" min="0" step="0.01"/></div>
+<div class="form-row"><label>Téléphone abonné</label><input type="tel" id="r-tel" placeholder="Ex: +226 70 00 00 00"/></div>
+      <div class="form-row"><label>État</label><select id="r-etat"><option value="actif">Actif</option><option value="suspendu">Suspendu</option><option value="resilie">Résilié</option></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="saveRaccordement()">💾 Enregistrer</button>
+      <button class="btn-secondary" onclick="closeRaccordementModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-intervention">
+  <div class="modal">
+    <div class="modal-header"><h2 id="interv-modal-title">🔧 Nouvelle Intervention</h2><button onclick="closeInterventionModal()" class="modal-close">✕</button></div>
+    <input type="hidden" id="i-id" value=""/>
+    <div class="form-row"><label>Point d'eau *</label><select id="i-point"></select></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Type</label><select id="i-type"><option value="reparation">Réparation</option><option value="maintenance">Maintenance</option><option value="rehabilitation">Réhabilitation</option><option value="installation">Installation</option><option value="urgence">Urgence</option><option value="inspection">Inspection</option></select></div>
+      <div class="form-row"><label>Statut</label><select id="i-statut"><option value="en_cours">En cours</option><option value="termine">Terminé</option><option value="planifie">Planifié</option></select></div>
+    </div>
+    <div class="form-row"><label>Description</label><textarea id="i-desc" rows="3" placeholder="Description de l'intervention..."></textarea></div>
+    <div class="form-grid">
+      <div class="form-row"><label>Technicien</label><input type="text" id="i-tech" placeholder="Nom du technicien"/></div>
+      <div class="form-row"><label>Coût (FCFA)</label><input type="number" id="i-cout" placeholder="50000" min="0"/></div>
+    </div>
+    <div class="form-row"><label>Date</label><input type="date" id="i-date"/></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="interv-save-btn" onclick="saveIntervention()">💾 Enregistrer</button>
+      <button class="btn-secondary" onclick="closeInterventionModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal détail intervention -->
+<div class="modal-overlay" id="modal-interv-detail">
+  <div class="modal">
+    <div class="modal-header"><h2>🔧 Détail Intervention</h2><button onclick="document.getElementById('modal-interv-detail').classList.remove('open')" class="modal-close">✕</button></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Point d eau</div>
+        <div id="id-point" style="font-size:13px;font-weight:600">—</div>
+        <div id="id-commune" style="font-size:11px;color:var(--muted)">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Type</div>
+        <div id="id-type" style="font-size:13px;font-weight:600">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Technicien</div>
+        <div id="id-tech" style="font-size:13px;font-weight:600">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Date</div>
+        <div id="id-date" style="font-size:13px;font-weight:600">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Coût</div>
+        <div id="id-cout" style="font-size:13px;font-weight:700;color:var(--accent)">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Statut</div>
+        <div id="id-statut" style="font-size:13px;font-weight:600">—</div>
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;margin-bottom:16px">
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Description</div>
+      <div id="id-desc" style="font-size:13px;line-height:1.6">—</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="id-modifier-btn" style="flex:1;padding:8px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">✏️ Modifier</button>
+      <button onclick="exportIntervPDF(currentIntervDetail)" style="flex:1;padding:8px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.2);border-radius:8px;font-size:12px;cursor:pointer">📄 Export PDF</button>
+      <button onclick="document.getElementById('modal-interv-detail').classList.remove('open')" style="flex:1;padding:8px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">✕ Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<!-- BUG 4 : Modal d'impression (aperçu + impression sans window.open, compatible Safari) -->
+<div class="modal-overlay" id="modal-print" onclick="if(event.target===this)closePrintModal()">
+  <div class="modal print-modal">
+    <div class="modal-header" style="margin-bottom:0">
+      <h2 id="print-title" style="font-size:15px">Aperçu impression</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="lancerImpression()" style="padding:7px 14px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
+        <button class="modal-close" onclick="closePrintModal()">✕</button>
+      </div>
+    </div>
+    <iframe id="print-frame" title="Aperçu du document"></iframe>
+  </div>
+</div>
+
+<!-- FEATURE 1 : Notification SMS simulée à l'abonné ONEA -->
+<div class="modal-overlay" id="modal-sms" onclick="if(event.target===this)closeSmsModal()">
+  <div class="modal" style="width:380px">
+    <div class="modal-header"><h2 style="font-size:16px">📱 Notification SMS</h2><button class="modal-close" onclick="closeSmsModal()">✕</button></div>
+    <div id="sms-dest" style="font-size:12px;color:var(--muted);margin-bottom:10px">📱 Destinataire</div>
+    <div style="background:#0b3d2e;border:1px solid var(--accent);border-radius:14px;padding:14px 16px;color:#e6edf3;font-size:13px;line-height:1.55;white-space:pre-wrap;font-family:'DM Sans',sans-serif" id="sms-body"></div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:center">Aperçu du message — envoi simulé (démonstration)</div>
+    <div class="modal-actions">
+      <button class="btn-primary" onclick="envoyerSMS()">📤 Envoyer le SMS</button>
+      <button class="btn-secondary" onclick="closeSmsModal()">Fermer</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-releve" onclick="if(event.target===this)closeReleveModal()"><div class="modal"><div class="modal-header"><span>📟 Relevé de Compteur</span><button class="modal-close" onclick="closeReleveModal()">✕</button></div><div style="margin-bottom:16px"><div style="font-size:13px;color:var(--muted);margin-bottom:4px">Abonné</div><div style="font-weight:600;font-size:15px" id="releve-nom">—</div><div style="font-size:12px;color:var(--accent)" id="releve-compteur">—</div></div><div class="form-row"><label>Mois</label><select id="releve-mois"><option value="1">Janvier</option><option value="2">Février</option><option value="3">Mars</option><option value="4">Avril</option><option value="5">Mai</option><option value="6">Juin</option><option value="7">Juillet</option><option value="8">Août</option><option value="9">Septembre</option><option value="10">Octobre</option><option value="11">Novembre</option><option value="12">Décembre</option></select></div><div class="form-row"><label>Année</label><input type="number" id="releve-annee" value="2026"/></div><div class="form-row"><label>Index actuel (m³)</label><input type="number" id="releve-index" placeholder="Ex: 125" min="0" step="0.01"/></div><input type="hidden" id="releve-id"/><div id="releve-result"></div><div class="modal-footer"><button class="btn-cancel" onclick="closeReleveModal()">Annuler</button><button class="btn-save" onclick="saveReleve()">📊 Calculer et Enregistrer</button></div></div></div>
+<script src="app.js?v=2"></script>
+
+<!-- Modal détail utilisateur -->
+<div class="modal-overlay" id="modal-user-detail">
+  <div class="modal">
+    <div class="modal-header"><h2>👤 Fiche Utilisateur</h2><button onclick="document.getElementById('modal-user-detail').classList.remove('open')" class="modal-close">✕</button></div>
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:16px;align-items:center;margin-bottom:20px">
+      <div id="detail-avatar" style="width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;background:rgba(0,119,255,.1)">👤</div>
+      <div>
+        <div id="detail-nom" style="font-size:18px;font-weight:700;margin-bottom:4px">—</div>
+        <div id="detail-role-badge" style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600">—</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Email</div>
+        <div id="detail-email" style="font-size:13px;font-weight:500">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Statut</div>
+        <div id="detail-statut" style="font-size:13px;font-weight:500">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Role</div>
+        <div id="detail-role" style="font-size:13px;font-weight:500">—</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:12px">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Acces</div>
+        <div id="detail-acces" style="font-size:13px;font-weight:500">—</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="detail-modifier-btn" onclick="" style="flex:1;padding:8px;background:var(--accent);color:#000;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Modifier</button>
+      <button onclick="imprimerFicheUser()" style="flex:1;padding:8px;background:rgba(0,119,255,.1);color:#0077ff;border:1px solid rgba(0,119,255,.2);border-radius:8px;font-size:12px;cursor:pointer">Imprimer</button>
+      <button onclick="document.getElementById('modal-user-detail').classList.remove('open')" style="flex:1;padding:8px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;font-size:12px;cursor:pointer">Fermer</button>
+    </div>
+  </div>
+</div>
+<button id="btn-top" onclick="scrollToTop()" title="Retour en haut" style="position:fixed;bottom:24px;left:24px;width:40px;height:40px;background:var(--accent);color:#000;border:none;border-radius:50%;font-size:18px;cursor:pointer;z-index:9998;display:none;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,200,150,.4);transition:all .2s ease">↑</button>
+</body>
+</html>
+<script>
+// Injection page télédétection
+document.addEventListener('DOMContentLoaded', function(){
+  const pc = document.querySelector('.page-container');
+  const div = document.createElement('div');
+  div.className = 'page';
+  div.id = 'page-teledetection';
+  div.innerHTML = `
+    <div style="background:linear-gradient(135deg,var(--surface),var(--surface2));border-bottom:1px solid var(--border);padding:14px 20px;flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,#0077ff,#c084fc);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🛰️</div>
+          <div>
+            <div style="font-family:Syne,sans-serif;font-size:16px;font-weight:800">Télédétection — Prospection Points d'Eau</div>
+            <div style="font-size:11px;color:var(--muted)">Sentinel-2 ESA · Copernicus · NDWI/NDVI · Burkina Faso</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button style="padding:8px 16px;background:rgba(0,119,255,.15);color:#0077ff;border:1px solid rgba(0,119,255,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:700" onclick="analyserZone()">🔍 Analyser zone</button>
+          <button style="padding:8px 16px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600" onclick="exportZones()">📥 Export zones</button>
+        </div>
+      </div>
+    </div>
+    <div class="teledetection-layout">
+      <div class="td-sidebar">
+
+        <div class="td-section">
+          <div class="td-section-title">🛰️ Source données</div>
+          <div class="form-row" style="margin-bottom:8px">
+            <label>Satellite</label>
+            <select id="td-satellite">
+              <option value="sentinel2">Sentinel-2 (ESA)</option>
+              <option value="landsat8">Landsat-8 (NASA)</option>
+              <option value="modis">MODIS (NASA)</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:8px">
+            <label>Région d'analyse</label>
+            <select id="td-region">
+              <option value="">Tout le Burkina Faso</option>
+              <option>Centre</option><option>Nord</option><option>Sahel</option>
+              <option>Hauts-Bassins</option><option>Est</option>
+              <option>Boucle du Mouhoun</option><option>Centre-Nord</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-bottom:8px">
+            <label>Type d'analyse</label>
+            <select id="td-type-analyse">
+              <option value="forages">🔵 Zones favorables forages</option>
+              <option value="barrages">🟡 Sites potentiels barrages</option>
+              <option value="eau_surface">💧 Eau de surface</option>
+              <option value="ndwi">📊 Indice NDWI</option>
+              <option value="ndvi">🌿 Indice NDVI</option>
+            </select>
+          </div>
+          <button onclick="lancerAnalyse()" style="width:100%;padding:10px;background:linear-gradient(135deg,#0077ff,#00c896);color:#000;border:none;border-radius:10px;font-family:Syne,sans-serif;font-size:13px;font-weight:800;cursor:pointer;transition:.2s;letter-spacing:.3px" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">🚀 Lancer l'analyse</button>
+        </div>
+
+        <div class="td-section">
+          <div class="td-section-title">📊 Indices spectraux</div>
+          <div class="indice-card">
+            <div>
+              <div style="font-weight:500">NDWI</div>
+              <div style="font-size:10px;color:var(--muted)">Indice eau souterraine</div>
+              <div class="indice-bar"><div class="indice-fill" id="ndwi-bar" style="width:65%;background:#0077ff"></div></div>
+            </div>
+            <div class="indice-val" id="ndwi-val" style="color:#0077ff">0.65</div>
+          </div>
+          <div class="indice-card">
+            <div>
+              <div style="font-weight:500">NDVI</div>
+              <div style="font-size:10px;color:var(--muted)">Indice végétation</div>
+              <div class="indice-bar"><div class="indice-fill" id="ndvi-bar" style="width:48%;background:#00c896"></div></div>
+            </div>
+            <div class="indice-val" id="ndvi-val" style="color:#00c896">0.48</div>
+          </div>
+          <div class="indice-card">
+            <div>
+              <div style="font-weight:500">MNDWI</div>
+              <div style="font-size:10px;color:var(--muted)">Eau modifié</div>
+              <div class="indice-bar"><div class="indice-fill" id="mndwi-bar" style="width:72%;background:#22d3ee"></div></div>
+            </div>
+            <div class="indice-val" id="mndwi-val" style="color:#22d3ee">0.72</div>
+          </div>
+          <div class="indice-card">
+            <div>
+              <div style="font-weight:500">LST</div>
+              <div style="font-size:10px;color:var(--muted)">Température surface</div>
+              <div class="indice-bar"><div class="indice-fill" id="lst-bar" style="width:35%;background:#ff6b35"></div></div>
+            </div>
+            <div class="indice-val" id="lst-val" style="color:#ff6b35">32°C</div>
+          </div>
+        </div>
+
+        <div class="td-section">
+          <div class="td-section-title">🔵 Zones favorables forages <span id="zones-count" style="color:var(--accent)">(5)</span></div>
+          <div id="zones-forages-list"></div>
+        </div>
+
+        <div class="td-section">
+          <div class="td-section-title">🟡 Sites potentiels barrages <span id="barrages-count" style="color:var(--warn)">(3)</span></div>
+          <div id="zones-barrages-list"></div>
+        </div>
+
+        <div class="td-section">
+          <div class="td-section-title">�� Couches carte</div>
+          <div class="layer-toggle">
+            <span>💧 Points d'eau existants</span>
+            <div class="toggle-switch on" id="toggle-points" onclick="toggleLayer(this,'points_region')"></div>
+          </div>
+          <div class="layer-toggle">
+            <span>🔵 Zones forages</span>
+            <div class="toggle-switch" id="toggle-forages" onclick="toggleLayer(this,'forages')"></div>
+          </div>
+          <div class="layer-toggle">
+            <span>🟡 Sites barrages</span>
+            <div class="toggle-switch" id="toggle-barrages" onclick="toggleLayer(this,'barrages')"></div>
+          </div>
+          <div class="layer-toggle">
+            <span>🌿 Couche NDVI</span>
+            <div class="toggle-switch" id="toggle-ndvi" onclick="toggleLayer(this,'ndvi')"></div>
+          </div>
+          <div class="layer-toggle">
+            <span>💦 Couche NDWI</span>
+            <div class="toggle-switch" id="toggle-ndwi" onclick="toggleLayer(this,'ndwi')"></div>
+          </div>
+          <div class="layer-toggle">
+            <span>💧 Eau de surface</span>
+            <div class="toggle-switch" id="toggle-eau" onclick="toggleLayer(this,'eau_surface')"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <!-- Onglets -->
+        <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface)">
+          <button id="td-tab-carte" onclick="switchTdTab('carte')"
+            style="padding:10px 20px;background:var(--accent);color:#000;border:none;
+            font-family:Syne,sans-serif;font-size:12px;font-weight:700;cursor:pointer;
+            border-bottom:3px solid var(--accent)">🗺️ Carte interactive</button>
+          <button id="td-tab-zones" onclick="switchTdTab('zones')"
+            style="padding:10px 20px;background:transparent;color:var(--muted);border:none;
+            font-family:Syne,sans-serif;font-size:12px;font-weight:600;cursor:pointer;
+            border-bottom:3px solid transparent">📋 Zones prospection</button>
+        </div>
+        <!-- Vue carte -->
+        <div id="td-view-carte" style="position:relative;flex:1">
+          <div id="td-map" style="width:100%;height:100%"></div>
+        <button onclick="toggleTdBasemap()" style="position:absolute;top:10px;left:50px;z-index:1000;padding:6px 12px;background:rgba(20,30,48,.85);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;font-size:11px;cursor:pointer;backdrop-filter:blur(4px)" id="btn-td-sat">🛰️ Satellite</button>
+        <div class="measure-toolbar">
+          <div style="font-size:11px;color:var(--muted);font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Mesures</div>
+          <button class="measure-btn" id="btn-measure-dist" onclick="activerMesureDistance()">📏 Distance</button>
+          <button class="measure-btn" id="btn-measure-area" onclick="activerMesureSurface()">⬡ Surface</button>
+          <button class="measure-btn" onclick="effacerMesures()">🗑️ Effacer</button>
+          <div class="measure-result" id="measure-result"></div>
+        </div>
+        <div class="td-legend">
+          <div class="leg-title">Télédétection</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#0077ff;opacity:.7"></div>Zone favorable forage</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#fbbf24;opacity:.7"></div>Site potentiel barrage</div>
+          <div style="font-size:10px;color:var(--muted);margin:4px 0 2px;font-weight:600">POINTS D'EAU</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#f59e0b;border-radius:3px"></div>Barrage</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#06b6d4;border-radius:3px"></div>Retenue</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#3b82f6"></div>Forage</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#a855f7"></div>Puits</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#84cc16"></div>Borne</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#22d3ee;opacity:.5;border-radius:2px"></div>NDWI élevé</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#16a34a;opacity:.5;border-radius:2px"></div>NDVI élevé</div>
+        </div>
+        </div><!-- fin td-view-carte -->
+
+        <!-- Vue tableau zones prospection -->
+        <div id="td-view-zones" style="display:none;flex:1;overflow-y:auto;padding:16px;background:var(--bg)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+            <div>
+              <div style="font-family:Syne,sans-serif;font-size:15px;font-weight:800">Zones de prospection — Résultats Sentinel-2</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">33 zones forages · 20 sites barrages · Indices NDWI/NDVI</div>
+            </div>
+            <button onclick="exportZones()" style="padding:8px 14px;background:rgba(0,200,150,.1);color:var(--accent);border:1px solid rgba(0,200,150,.3);border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">📥 Export CSV</button>
+          </div>
+          <div id="zones-prospection-table">
+            <div style="text-align:center;padding:40px;color:var(--muted)">Cliquez sur l'onglet pour charger les zones...</div>
+          </div>
+        </div>
+
+      </div><!-- fin wrapper onglets -->
+    </div>`;
+  pc.appendChild(div);
+  setTimeout(chargerTableauZones, 500);
+});
+</script>
