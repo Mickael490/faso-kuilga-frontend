@@ -1197,7 +1197,7 @@ async function testerConnexionSentinel(){
   const status = document.getElementById('sentinel-status');
   if(btn) btn.textContent = '⏳ Test en cours...';
   try{
-    const res = await fetch('/api/onea/ndwi/253');
+    const res = await fetch(API + '/onea/ndwi/253');
     const d = await res.json();
     if(d.ndwi !== undefined){
       if(status) status.innerHTML = '🟢 Connecté';
@@ -2051,7 +2051,7 @@ function afficherDetailTd(z, type){
 
 async function chargerZonesExistantes() {
   try {
-    const res = await fetch('/api/prospection/zones');
+    const res = await fetch(API + '/prospection/zones');
     if (!res.ok) return;
     const zones = await res.json();
     if (zones.length > 0) { afficherZonesSurCarte(zones, 'tous'); afficherListeZones(zones); mettreAJourIndices(zones); tdMap.fitBounds([[9.4,-5.5],[15.1,2.5]]); }
@@ -2075,7 +2075,7 @@ async function lancerAnalyse() {
   afficherProgressionTd(true);
   showToast('Connexion Sentinel-2 en cours (20-30s)...');
   try {
-    const res = await fetch('/api/prospection/analyser', {
+    const res = await fetch(API + '/prospection/analyser', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({region: regionFiltre, type_analyse: typeAnalyse})
     });
@@ -2355,7 +2355,7 @@ function updateRegionSelect(){
 // ── ONEA KPIs DEPUIS API ──────────────────────────────────────────────────────
 async function refreshOneaStats(){
   try{
-    const res = await fetch('/api/onea/stats');
+    const res = await fetch(API + '/onea/stats');
     const s = await res.json();
     const el = (id) => document.getElementById(id);
     if(el('onea-total')) el('onea-total').textContent = s.total_abonnes;
@@ -2430,7 +2430,7 @@ async function saveReleve(){
   if(isNaN(index_actuel)||index_actuel<0){showToast('⚠️ Index invalide');return;}
 
   try{
-    const res = await fetch('/api/releve',{
+    const res = await fetch(API + '/releve',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({raccordement_id, index_actuel, mois, annee})
@@ -2466,7 +2466,7 @@ async function saveReleve(){
 
 async function voirHistorique(id, nom){
   try{
-    const res = await fetch(`/api/raccordements/${id}/historique`);
+    const res = await fetch(`${API}/raccordements/${id}/historique`);
     const data = await res.json();
     const moisNoms=['','Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
     const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
@@ -2498,7 +2498,7 @@ async function voirHistorique(id, nom){
 }
 
 async function marquerPaye(consoId){
-  await fetch(`/api/consommations/${consoId}/paiement`,{method:'PUT'});
+  await fetch(`${API}/consommations/${consoId}/paiement`,{method:'PUT'});
   refreshOneaStats();
   showToast('✅ Facture marquée comme payée');
 }
@@ -2506,7 +2506,7 @@ async function marquerPaye(consoId){
 // ── IMPRESSION FACTURE ONEA ───────────────────────────────────────────────────
 async function imprimerFacture(id, nom, compteur){
   try{
-    const res = await fetch(`/api/raccordements/${id}/historique`);
+    const res = await fetch(`${API}/raccordements/${id}/historique`);
     const data = await res.json();
     if(data.length===0){showToast('⚠️ Aucun relevé enregistré pour cet abonné');return;}
     
@@ -2671,7 +2671,7 @@ function lancerImpression(){
 // ── MODIFIER RACCORDEMENT ─────────────────────────────────────────────────────
 async function modifierRaccordement(id){
   try{
-    const res = await fetch(`/api/raccordements`);
+    const res = await fetch(`${API}/raccordements`);
     const data = await res.json();
     const r = data.find(x=>x.id===id);
     if(!r){showToast('❌ Raccordement non trouvé');return;}
@@ -2880,7 +2880,7 @@ async function actualiserNdwiBarrage(id){
   if(src) src.textContent='🛰️ Analyse Sentinel-2 en cours (~20s)…';
   showToast('🛰️ Analyse NDWI Sentinel-2 en cours…');
   try{
-    const res = await fetch(`/api/onea/ndwi/${id}`);
+    const res = await fetch(`${API}/onea/ndwi/${id}`);
     const d = await res.json();
     if(d.error){
       if(src) src.textContent='⚠️ Données satellite indisponibles';
@@ -2967,7 +2967,7 @@ async function showOneaDetail(r){
   document.getElementById('od-statut').textContent = '';
 
   try{
-    const res = await fetch(`/api/raccordements/${r.id}/historique`);
+    const res = await fetch(`${API}/raccordements/${r.id}/historique`);
     const data = await res.json();
     if(data.length>0){
       const d = data[0];
@@ -3029,7 +3029,7 @@ async function calculerPrevisionNDVI(){
   try{
     // Calculer NDVI pour chaque barrage en parallèle
     const resultats = await Promise.allSettled(
-      barrages.map(b => fetch(`/api/onea/ndvi/${b.id}`).then(r=>r.json()))
+      barrages.map(b => fetch(`${API}/onea/ndvi/${b.id}`).then(r=>r.json()))
     );
 
     // Collecter les résultats valides
@@ -3135,7 +3135,7 @@ async function calculerPrevisionNDVI(){
 
 async function renderOneaStats(){
   try{
-    const res = await fetch('/api/onea/stats');
+    const res = await fetch(API + '/onea/stats');
     const s = await res.json();
 
     // Graphique répartition par type
@@ -3385,7 +3385,7 @@ async function calculerNdwiZone(id){
   if(out) out.textContent = '🛰️ Analyse Sentinel-2 en cours (~20s)…';
   showToast('🛰️ Calcul NDWI Sentinel-2 en cours…');
   try{
-    const res = await fetch(`/api/onea/ndwi/${id}`);
+    const res = await fetch(`${API}/onea/ndwi/${id}`);
     const d = await res.json();
     if(d.error){
       if(out) out.textContent = '⚠️ Données satellite indisponibles';
@@ -3406,7 +3406,7 @@ let turbiditeCache = {};
 async function analyserTurbidite(pointId, nom){
   showToast('🔬 Analyse turbidité '+nom+' en cours...');
   try{
-    const res = await fetch(`/api/onea/ndwi/${pointId}`);
+    const res = await fetch(`${API}/onea/ndwi/${pointId}`);
     const d = await res.json();
     if(d.error){ showToast('❌ '+d.error); return; }
 
@@ -3439,7 +3439,7 @@ async function analyserTurbidite(pointId, nom){
 // ── MARQUER FACTURE PAYÉE DEPUIS PANNEAU DÉTAIL ───────────────────────────────
 async function marquerPayeDetail(consoId, raccordement){
   try{
-    await fetch(`/api/consommations/${consoId}/paiement`, {method:'PUT'});
+    await fetch(`${API}/consommations/${consoId}/paiement`, {method:'PUT'});
     document.getElementById('od-statut').innerHTML = '<span style="color:#00c896">✅ Payé</span>';
     const payerBtn = document.getElementById('od-payer-btn');
     if(payerBtn) payerBtn.style.display = 'none';
@@ -3453,7 +3453,7 @@ async function marquerPayeDetail(consoId, raccordement){
 // ── RAPPORT TELEDETECTION ────────────────────────────────────────────────────
 function genererRapportTeledetection(){
   // Recuperer les zones en base
-  fetch('/api/prospection/zones').then(function(r){return r.json();}).then(function(zones){
+  fetch(API + '/prospection/zones').then(function(r){return r.json();}).then(function(zones){
     if(zones.length===0){showToast('Lancez d abord une analyse teledetection');return;}
     var now = new Date().toLocaleDateString('fr-FR');
     var heure = new Date().toLocaleTimeString('fr-FR');
@@ -4294,7 +4294,7 @@ async function chargerTableauZones() {
   if (!container) return;
 
   try {
-    const res = await fetch('/api/prospection/zones');
+    const res = await fetch(API + '/prospection/zones');
     const zones = await res.json();
 
     if (!zones || zones.length === 0) {
