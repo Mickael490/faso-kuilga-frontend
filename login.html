@@ -174,7 +174,7 @@ body{font-family:"DM Sans",sans-serif;background:var(--bg);color:var(--text);min
   </div>
 </div>
 <script>
-const API="/api";
+const API = window.location.hostname === "localhost" ? "/api" : "https://faso-kuilga-backend.onrender.com/api";
 if(localStorage.getItem("user")) window.location.href="index.html";
 function animCount(id,target,duration){
   let start=0;const step=target/(duration/16);const el=document.getElementById(id);
