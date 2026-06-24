@@ -1,4 +1,4 @@
-const API = '/api';
+const API = window.location.hostname === 'localhost' ? '/api' : 'https://faso-kuilga-backend.onrender.com/api';
 let allPoints = [];
 // Vider la barre de recherche au chargement
 window.addEventListener('load', function(){ 
