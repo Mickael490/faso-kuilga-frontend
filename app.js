@@ -467,7 +467,7 @@ function renderTable(){
       <td>${p.commune||'—'}</td>
       <td>${p.pop_desservie?p.pop_desservie.toLocaleString():'—'}</td>
       <td><div class="td-actions">
-        <button class="td-btn edit" onclick='showDetail(${JSON.stringify(p)})' title="Voir le détail">👁️ Voir</button>
+        <button class="td-btn edit" onclick='showDetail(${JSON.stringify(p).replace(/'/g,"&apos;")})' title="Voir le détail">👁️ Voir</button>
         <button class="td-btn edit" onclick='showDetail(${JSON.stringify(p)});switchPage("carte",document.querySelectorAll(".tnav")[0])'>📍</button>
         <button class="td-btn del" onclick="deletePoint(${p.id})">🗑️</button>
       </div></td>
